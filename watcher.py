@@ -14,7 +14,7 @@ import os
 import logging
 
 logging.basicConfig(
-    level=logging.INFO,            # DEBUG for more details
+    level=logging.INFO,            
     format='%(asctime)s %(levelname)s: %(message)s',
     handlers=[
         logging.FileHandler("watcher.log"),
@@ -39,7 +39,7 @@ def send_email(subject, body):
 
 
 API_BASE = os.getenv("API_URL", "https://vtuapi.internyet.in/api/v1/internships")
-MAX_PAGES = int(os.getenv("MAX_PAGES", "5"))     # how many pages to fetch (increase if needed)
+MAX_PAGES = int(os.getenv("MAX_PAGES", "20"))     
 SEEN_FILE = "seen.json"
 
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -63,7 +63,7 @@ def save_seen(seen_set):
         json.dump(sorted(list(seen_set)), f, indent=2, ensure_ascii=False)
 
 def make_id(item):
-    # Prefer explicit id field, else hash title+company+link
+    
     for k in ("id", "_id", "internship_id"):
         if isinstance(item, dict) and k in item and item[k]:
             return str(item[k])
@@ -76,7 +76,7 @@ def infer_title(item):
     return item.get("title") or item.get("name") or item.get("position") or "Internship"
 
 def infer_link(item):
-    # try common fields; if slug, join with site root
+   
     for k in ("url","link","job_url","application_url"):
         if item.get(k):
             return item.get(k)
@@ -84,7 +84,7 @@ def infer_link(item):
     if slug:
         base = "https://vtu.internyet.in"
         return urljoin(base, slug)
-    # fallback: return API item id so at least something
+    
     return f"https://vtu.internyet.in/internships"
 
 def send_email_plain(subject, body):
