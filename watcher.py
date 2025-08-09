@@ -185,13 +185,7 @@ def main():
     else:
         print("No new internships.")
         # Send confirmation email even if no new internships found
-        try:
-            send_email(
-                subject="VTU Internship Watcher: Run completed",
-                body="Your watcher script ran successfully. No new internships found this time."
-            )
-        except Exception as e:
-            print("Confirmation email send failed:", e)
+        
 
     save_seen(seen)
     if DEBUG:
