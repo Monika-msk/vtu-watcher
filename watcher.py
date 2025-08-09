@@ -11,6 +11,17 @@ import requests
 import smtplib
 from email.mime.text import MIMEText
 import os
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,            # DEBUG for more details
+    format='%(asctime)s %(levelname)s: %(message)s',
+    handlers=[
+        logging.FileHandler("watcher.log"),
+        logging.StreamHandler(sys.stdout)  # also print to console
+    ]
+)
+
 
 def send_email(subject, body):
     smtp_user = os.environ.get("SMTP_USER")
@@ -76,21 +87,34 @@ def infer_link(item):
     # fallback: return API item id so at least something
     return f"https://vtu.internyet.in/internships"
 
-def send_email_plain(subject, body_text):
+def send_email_plain(subject, body):
     if not SMTP_USER or not SMTP_PASS or not EMAIL_TO:
-        print("Email not configured. Set SMTP_USER, SMTP_PASS, EMAIL_TO.")
+        logging.warning("Email not configured. Set SMTP_USER, SMTP_PASS, EMAIL_TO.")
         return
     msg = EmailMessage()
     msg["From"] = SMTP_USER
     msg["To"] = EMAIL_TO
     msg["Subject"] = subject
-    msg.set_content(body_text)
+    msg.set_content(body)
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
         smtp.ehlo()
         smtp.starttls()
         smtp.login(SMTP_USER, SMTP_PASS)
         smtp.send_message(msg)
-    print("Email sent:", subject)
+    logging.info(f"Email sent: {subject}")
+
+def send_email_with_retry(subject, body, retries=3, delay=5):
+    for attempt in range(retries):
+        try:
+            send_email_plain(subject, body)
+            logging.info(f"Email sent: {subject}")
+            break
+        except Exception as e:
+            logging.error(f"Email send failed (attempt {attempt+1}): {e}")
+            if attempt < retries -1:
+                time.sleep(delay)
+            else:
+                logging.error("Giving up sending email.")
 
 # ---------- main ----------
 def fetch_page(page):
@@ -111,6 +135,16 @@ def fetch_page(page):
     r.raise_for_status()
     return r.json()
 
+def fetch_page_with_retry(page, retries=3, delay=5):
+    for attempt in range(retries):
+        try:
+            return fetch_page(page)
+        except Exception as e:
+            logging.error(f"Fetch page {page} failed (attempt {attempt+1}): {e}")
+            if attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                raise
 
 def extract_items_from_response(resp_json):
     if resp_json is None:
@@ -140,27 +174,25 @@ def extract_items_from_response(resp_json):
 
     return []
 
-
 def main():
     if DEBUG:
-        print("DEBUG mode ON")
+        logging.info("DEBUG mode ON")
 
     seen = load_seen()
     newly_seen = []
-    page = 1
     total_fetched = 0
 
     for page in range(1, MAX_PAGES + 1):
         try:
-            resp = fetch_page(page)
+            resp = fetch_page_with_retry(page)
         except Exception as e:
-            print(f"Failed to fetch page {page}: {e}")
+            logging.error(f"Failed to fetch page {page}: {e}")
             break
         items = extract_items_from_response(resp)
         if DEBUG:
-            print(f"page {page} -> {len(items)} items")
+            logging.info(f"page {page} -> {len(items)} items")
             if page == 1:
-                print("sample item (raw):", json.dumps(items[0] if items else {}, indent=2, ensure_ascii=False))
+                logging.info(f"sample item (raw): {json.dumps(items[0] if items else {}, indent=2, ensure_ascii=False)}")
         if not items:
             break
         total_fetched += len(items)
@@ -170,26 +202,26 @@ def main():
                 seen.add(uid)
                 newly_seen.append((uid, it))
         # if API returns fewer than page-size it may be last page; continue or break is fine
-    print(f"Fetched {total_fetched} items; new found: {len(newly_seen)}")
+
+    logging.info(f"Fetched {total_fetched} items; new found: {len(newly_seen)}")
 
     if newly_seen:
         for uid, it in newly_seen:
             title = infer_title(it)
             link = infer_link(it)
             body = f"{title}\n{link}\n\nRaw: {json.dumps(it, ensure_ascii=False)}"
-            print("New:", title, link)
+            logging.info(f"New: {title} {link}")
             try:
                 send_email_plain(f"New VTU Internship: {title}", body)
             except Exception as e:
-                print("Email send failed:", e)
+                logging.error(f"Email send failed: {e}")
     else:
-        print("No new internships.")
-        # Send confirmation email even if no new internships found
-        
+        logging.info("No new internships.")
+        # No email sent if no new internships found
 
     save_seen(seen)
     if DEBUG:
-        print("Saved seen.json with", len(seen), "items")
+        logging.info(f"Saved seen.json with {len(seen)} items")
 
 if __name__ == "__main__":
     main()
