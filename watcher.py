@@ -8,6 +8,23 @@ import os, json, time, hashlib, smtplib, sys
 from email.message import EmailMessage
 from urllib.parse import urlparse, urljoin
 import requests
+import smtplib
+from email.mime.text import MIMEText
+import os
+
+def send_email(subject, body):
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_pass = os.environ.get("SMTP_PASS")
+    email_to = os.environ.get("EMAIL_TO")
+
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = smtp_user
+    msg['To'] = email_to
+
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, [email_to], msg.as_string())
 
 # ---------- CONFIG ----------
 API_BASE = os.getenv("API_URL", "https://vtuapi.internyet.in/api/v1/internships")
@@ -155,8 +172,6 @@ def main():
         # if API returns fewer than page-size it may be last page; continue or break is fine
     print(f"Fetched {total_fetched} items; new found: {len(newly_seen)}")
 
-    # If running first time and you don't want alerts for existing items,
-    # run locally once with DEBUG=1, then commit seen.json before enabling Actions.
     if newly_seen:
         for uid, it in newly_seen:
             title = infer_title(it)
@@ -169,6 +184,14 @@ def main():
                 print("Email send failed:", e)
     else:
         print("No new internships.")
+        # Send confirmation email even if no new internships found
+        try:
+            send_email(
+                subject="VTU Internship Watcher: Run completed",
+                body="Your watcher script ran successfully. No new internships found this time."
+            )
+        except Exception as e:
+            print("Confirmation email send failed:", e)
 
     save_seen(seen)
     if DEBUG:
