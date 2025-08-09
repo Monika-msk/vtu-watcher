@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Single-run watcher: fetch pages from API, detect new items, email them,
 and update seen.json. Meant to be run from GitHub Actions or locally.
@@ -37,7 +37,7 @@ def send_email(subject, body):
         server.login(smtp_user, smtp_pass)
         server.sendmail(smtp_user, [email_to], msg.as_string())
 
-# ---------- CONFIG ----------
+
 API_BASE = os.getenv("API_URL", "https://vtuapi.internyet.in/api/v1/internships")
 MAX_PAGES = int(os.getenv("MAX_PAGES", "5"))     # how many pages to fetch (increase if needed)
 SEEN_FILE = "seen.json"
@@ -50,7 +50,7 @@ EMAIL_TO = os.getenv("EMAIL_TO")
 
 DEBUG = os.getenv("DEBUG", "") != ""
 
-# ---------- helpers ----------
+
 def load_seen():
     if not os.path.exists(SEEN_FILE):
         return set()
@@ -116,9 +116,9 @@ def send_email_with_retry(subject, body, retries=3, delay=5):
             else:
                 logging.error("Giving up sending email.")
 
-# ---------- main ----------
+
 def fetch_page(page):
-    # Build page URL (some APIs accept ?page=)
+    
     if "?" in API_BASE:
         url = API_BASE.split("?")[0] + f"?page={page}"
     else:
@@ -151,19 +151,19 @@ def extract_items_from_response(resp_json):
         return []
 
     if isinstance(resp_json, dict):
-        # Case: data contains internships directly
+        
         if isinstance(resp_json.get("data"), list):
             return resp_json["data"]
 
-        # Case: data is an object containing a "data" list
+        
         if isinstance(resp_json.get("data"), dict) and isinstance(resp_json["data"].get("data"), list):
             return resp_json["data"]["data"]
 
-        # Other known keys
+      
         if "internships" in resp_json and isinstance(resp_json["internships"], list):
             return resp_json["internships"]
 
-        # fallback: first list inside
+       
         for v in resp_json.values():
             if isinstance(v, list):
                 return v
@@ -201,7 +201,7 @@ def main():
             if uid not in seen:
                 seen.add(uid)
                 newly_seen.append((uid, it))
-        # if API returns fewer than page-size it may be last page; continue or break is fine
+       
 
     logging.info(f"Fetched {total_fetched} items; new found: {len(newly_seen)}")
 
@@ -217,7 +217,7 @@ def main():
                 logging.error(f"Email send failed: {e}")
     else:
         logging.info("No new internships.")
-        # No email sent if no new internships found
+        
 
     save_seen(seen)
     if DEBUG:
