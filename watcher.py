@@ -12,7 +12,7 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s: %(message)s',
     handlers=[
         logging.FileHandler("watcher.log"),
-        logging.StreamHandler(sys.stdout)  # also print to console
+        logging.StreamHandler(sys.stdout)  
     ]
 )
 
