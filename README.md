@@ -1,6 +1,4 @@
-Sure! Here's a simple, friendly README draft for your VTU Internship Watcher project — written in a clear, human tone that anyone can understand:
 
----
 
 # VTU Internship Watcher
 
@@ -34,13 +32,4 @@ Because internships get filled fast, and being the first to know can make all th
 * Commit and push the code to trigger GitHub Actions.
 * Check your email when new internships pop up!
 
-## Want to improve it?
 
-* Add better error handling and automatic retries.
-* Switch to WhatsApp or other notification methods (email is still the easiest and most reliable).
-* Add more detailed logging or notification summaries.
-* Make the script smarter with filters for specific internship types or deadlines.
-
----
-
-Feel free to copy-paste this into your repo’s README.md file! Want me to format it in Markdown for you?
