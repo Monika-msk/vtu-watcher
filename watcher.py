@@ -1,9 +1,3 @@
-
-"""
-Single-run watcher: fetch pages from API, detect new items, email them,
-and update seen.json. Meant to be run from GitHub Actions or locally.
-"""
-
 import os, json, time, hashlib, smtplib, sys
 from email.message import EmailMessage
 from urllib.parse import urlparse, urljoin
