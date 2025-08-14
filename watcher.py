@@ -1,39 +1,27 @@
-import os, json, time, hashlib, smtplib, sys
-from email.message import EmailMessage
-from urllib.parse import urlparse, urljoin
-import requests
-import smtplib
-from email.mime.text import MIMEText
 import os
+import json
+import time
+import hashlib
+import smtplib
+import sys
 import logging
+from email.message import EmailMessage
+from urllib.parse import urljoin
+import requests
 
+# --- Logging Setup ---
 logging.basicConfig(
-    level=logging.INFO,            
+    level=logging.INFO,
     format='%(asctime)s %(levelname)s: %(message)s',
     handlers=[
         logging.FileHandler("watcher.log"),
-        logging.StreamHandler(sys.stdout)  
+        logging.StreamHandler(sys.stdout)
     ]
 )
 
-
-def send_email(subject, body):
-    smtp_user = os.environ.get("SMTP_USER")
-    smtp_pass = os.environ.get("SMTP_PASS")
-    email_to = os.environ.get("EMAIL_TO")
-
-    msg = MIMEText(body)
-    msg['Subject'] = subject
-    msg['From'] = smtp_user
-    msg['To'] = email_to
-
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(smtp_user, [email_to], msg.as_string())
-
-
+# --- Config ---
 API_BASE = os.getenv("API_URL", "https://vtuapi.internyet.in/api/v1/internships")
-MAX_PAGES = int(os.getenv("MAX_PAGES", "20"))     
+MAX_PAGES = int(os.getenv("MAX_PAGES", "20"))
 SEEN_FILE = "seen.json"
 
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -45,6 +33,7 @@ EMAIL_TO = os.getenv("EMAIL_TO")
 DEBUG = os.getenv("DEBUG", "") != ""
 
 
+# --- Helper Functions ---
 def load_seen():
     if not os.path.exists(SEEN_FILE):
         return set()
@@ -52,12 +41,13 @@ def load_seen():
         data = json.load(f)
     return set(data)
 
+
 def save_seen(seen_set):
     with open(SEEN_FILE, "w", encoding="utf-8") as f:
         json.dump(sorted(list(seen_set)), f, indent=2, ensure_ascii=False)
 
+
 def make_id(item):
-    
     for k in ("id", "_id", "internship_id"):
         if isinstance(item, dict) and k in item and item[k]:
             return str(item[k])
@@ -66,20 +56,21 @@ def make_id(item):
     s = (title + "|" + str(link))
     return hashlib.sha1(s.encode("utf-8")).hexdigest()
 
+
 def infer_title(item):
     return item.get("title") or item.get("name") or item.get("position") or "Internship"
 
+
 def infer_link(item):
-   
-    for k in ("url","link","job_url","application_url"):
+    for k in ("url", "link", "job_url", "application_url"):
         if item.get(k):
             return item.get(k)
     slug = item.get("slug") or item.get("path")
     if slug:
         base = "https://vtu.internyet.in"
         return urljoin(base, slug)
-    
-    return f"https://vtu.internyet.in/internships"
+    return "https://vtu.internyet.in/internships"
+
 
 def send_email_plain(subject, body):
     if not SMTP_USER or not SMTP_PASS or not EMAIL_TO:
@@ -95,39 +86,35 @@ def send_email_plain(subject, body):
         smtp.starttls()
         smtp.login(SMTP_USER, SMTP_PASS)
         smtp.send_message(msg)
-    logging.info(f"Email sent: {subject}")
+
 
 def send_email_with_retry(subject, body, retries=3, delay=5):
     for attempt in range(retries):
         try:
             send_email_plain(subject, body)
-            logging.info(f"Email sent: {subject}")
+            logging.info(f"✅ Email sent: {subject}")
             break
         except Exception as e:
-            logging.error(f"Email send failed (attempt {attempt+1}): {e}")
-            if attempt < retries -1:
+            logging.error(f"❌ Email send failed (attempt {attempt+1}): {e}")
+            if attempt < retries - 1:
                 time.sleep(delay)
             else:
                 logging.error("Giving up sending email.")
 
 
 def fetch_page(page):
-    
     if "?" in API_BASE:
         url = API_BASE.split("?")[0] + f"?page={page}"
     else:
         url = API_BASE.rstrip("/") + f"?page={page}"
-
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/115.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0",
         "Accept": "application/json"
     }
-
     r = requests.get(url, headers=headers, timeout=20)
     r.raise_for_status()
     return r.json()
+
 
 def fetch_page_with_retry(page, retries=3, delay=5):
     for attempt in range(retries):
@@ -140,24 +127,18 @@ def fetch_page_with_retry(page, retries=3, delay=5):
             else:
                 raise
 
+
 def extract_items_from_response(resp_json):
     if resp_json is None:
         return []
 
     if isinstance(resp_json, dict):
-        
         if isinstance(resp_json.get("data"), list):
             return resp_json["data"]
-
-        
         if isinstance(resp_json.get("data"), dict) and isinstance(resp_json["data"].get("data"), list):
             return resp_json["data"]["data"]
-
-      
         if "internships" in resp_json and isinstance(resp_json["internships"], list):
             return resp_json["internships"]
-
-       
         for v in resp_json.values():
             if isinstance(v, list):
                 return v
@@ -168,13 +149,15 @@ def extract_items_from_response(resp_json):
 
     return []
 
+
+# --- Main Script ---
 def main():
     if DEBUG:
         logging.info("DEBUG mode ON")
 
     seen = load_seen()
-    newly_seen = []
     total_fetched = 0
+    new_count = 0
 
     for page in range(1, MAX_PAGES + 1):
         try:
@@ -182,40 +165,35 @@ def main():
         except Exception as e:
             logging.error(f"Failed to fetch page {page}: {e}")
             break
+
         items = extract_items_from_response(resp)
+
         if DEBUG:
-            logging.info(f"page {page} -> {len(items)} items")
-            if page == 1:
-                logging.info(f"sample item (raw): {json.dumps(items[0] if items else {}, indent=2, ensure_ascii=False)}")
+            logging.info(f"Page {page} -> {len(items)} items")
+            if page == 1 and items:
+                logging.info(f"Sample item: {json.dumps(items[0], indent=2, ensure_ascii=False)}")
+
         if not items:
             break
+
         total_fetched += len(items)
+
         for it in items:
             uid = make_id(it)
             if uid not in seen:
                 seen.add(uid)
-                newly_seen.append((uid, it))
-       
+                save_seen(seen)  # ✅ Save immediately to prevent duplicates if crash
+                new_count += 1
 
-    logging.info(f"Fetched {total_fetched} items; new found: {len(newly_seen)}")
+                title = infer_title(it)
+                link = infer_link(it)
+                body = f"{title}\n{link}\n\nRaw: {json.dumps(it, ensure_ascii=False)}"
+                logging.info(f"🆕 New internship: {title} {link}")
 
-    if newly_seen:
-        for uid, it in newly_seen:
-            title = infer_title(it)
-            link = infer_link(it)
-            body = f"{title}\n{link}\n\nRaw: {json.dumps(it, ensure_ascii=False)}"
-            logging.info(f"New: {title} {link}")
-            try:
-                send_email_plain(f"New VTU Internship: {title}", body)
-            except Exception as e:
-                logging.error(f"Email send failed: {e}")
-    else:
-        logging.info("No new internships.")
-        
+                send_email_with_retry(f"New VTU Internship: {title}", body)
 
-    save_seen(seen)
-    if DEBUG:
-        logging.info(f"Saved seen.json with {len(seen)} items")
+    logging.info(f"📊 Summary: {total_fetched} fetched, {new_count} new.")
+
 
 if __name__ == "__main__":
     main()
