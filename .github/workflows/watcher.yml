@@ -24,7 +24,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run VTU Watcher script
-        run: python main.py
+        run: python watcher.py
 
       - name: Commit updated seen.json
         run: |
