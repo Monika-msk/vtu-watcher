@@ -2,7 +2,8 @@ name: VTU Internship Watcher
 
 on:
   schedule:
-    - cron: "*/30 * * * *" # Every 30 minutes
+    - cron:
+ minutes
   workflow_dispatch:
 
 permissions:
